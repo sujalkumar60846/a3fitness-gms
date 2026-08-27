@@ -1,17 +1,30 @@
 # A3Fitness & Gym Management System (GMS) — Complete Project Context & Architecture
 
-**Last Updated:** August 27, 2026
+**Last Updated:** August 27, 2026  
+**Status:** Production Ready & Deployed on Vercel
 
 ---
 
 ## 📌 Executive Summary
 This enterprise fitness platform comprises two tightly synchronized Next.js 15 applications:
-1. **`main_app`** (Frontend Web Application — Port `3001` in Dev):
-   - High-converting, luxury fitness web application branded as **A3Fitness** (inspired by `wellnessclub.co.in`).
-   - Integrates live pricing, member status verifications, and prospective free trial pass submissions with the GMS backend.
-2. **`gms`** (Gym Management System & Member Portal — Port `3000` in Dev):
-   - Robust backend and administration platform powered by **Prisma ORM** and **PostgreSQL (Neon Cloud DB)**.
-   - Multi-role RBAC (`SUPER_ADMIN`, `ADMIN`, `STAFF`), member directory, QR attendance check-in, trial leads CRM, Cloudinary photo uploads, PDF invoices, and self-service member dashboards.
+1. **`main_app`** (A3Fitness Public Web Portal — Target Domain: `https://a3fitness-web.vercel.app` | Port `3001` in Dev):
+   - High-converting, luxury fitness web application branded as **A3Fitness Luxury Gym & Spa**.
+   - Features club amenities, workout programs, interactive virtual tour, live dynamic pricing from GMS, instant member lookup modal, and 3-Day VIP Free Pass lead capture.
+   - Physical Location: **Opposite Aakash Healthcare, Gate No. 4, Sector 3, Dwarka, New Delhi 110059**.
+2. **`gms`** (Gym Management System & Member Portal — Production URL: `https://a3fitness-gms.vercel.app` | Port `3000` in Dev):
+   - Comprehensive backend and administration platform powered by **Prisma ORM** and **PostgreSQL (Neon Cloud DB)**.
+   - Multi-role RBAC (`SUPER_ADMIN`, `ADMIN`, `STAFF`), member directory, dynamic QR attendance check-in desk, trial leads CRM with one-click member conversion, Cloudinary photo uploads, auto-generated PDF invoices, email notifications, and self-service member dashboards.
+
+---
+
+## 📍 Flagship Club Information
+- **Brand Title:** A3Fitness Luxury Gym & Spa
+- **Physical Address:** Opposite Aakash Healthcare, Gate No. 4, Sector 3, Dwarka, New Delhi – 110059
+- **Phone / Hotline:** +91 98765 43210
+- **Email:** concierge@a3fitness.in
+- **Operating Hours:**
+  - Mon – Sat: 5:30 AM – 11:00 PM
+  - Sun: 6:00 AM – 9:00 PM
 
 ---
 
@@ -22,8 +35,8 @@ This enterprise fitness platform comprises two tightly synchronized Next.js 15 a
 - **Brand Identity**: **A3Fitness** (*Luxury Gym & Spa*).
 - **Core Sections**:
   - **Sticky Navbar (`Navbar.tsx`)**: Glassmorphism navbar with live GMS synchronization badge (`GMS Sync Active`), member portal lookup trigger, and VIP free pass CTA.
-  - **Hero Section (`Hero.tsx`)**: High-impact banner with 3 stat counters (**500+ Active Members**, **5+ Elite Coaches**, **98.4% Goal Success Rate**) and an instant Member ID lookup search bar.
-  - **Programs Grid (`ProgramsGrid.tsx`)**: Cardio Strength, Olympic Lifting, Mind-Body Yoga, HIIT Metabolic, and Clinical Nutrition. *(Thermal Spa section removed per brand requirements)*.
+  - **Hero Section (`Hero.tsx`)**: High-impact banner with location pill (*Dwarka Sector 3, New Delhi*), 3 stat counters (**500+ Active Members**, **5+ Elite Coaches**, **98.4% Goal Success Rate**) and an instant Member ID lookup search bar.
+  - **Programs Grid (`ProgramsGrid.tsx`)**: Cardio Strength, Olympic Lifting, Mind-Body Yoga, HIIT Metabolic, and Clinical Nutrition.
   - **Why Choose Us (`WhyChooseUs.tsx`)**: World-Class Biomechanics, Smart Attendance & Portal, Tailored Macro Nutrition, Flexible 365-Day Access.
   - **Facilities Virtual Tour (`Facilities.tsx`)**: Strength Arena, Cardio Hub, Zen Sanctuary, A3 Clean Fuel Bar.
   - **Membership Tiers (`Pricing.tsx`)**: 4-tier pricing model dynamically fetched from GMS database suggested pricing:
@@ -31,11 +44,12 @@ This enterprise fitness platform comprises two tightly synchronized Next.js 15 a
     - **3 Months Transformation**: `₹3,300` / quarter
     - **6 Months Performance**: `₹6,000` / 6 months
     - **12 Months VIP All-Access**: `₹10,800` / year
-  - **Smart Member & Attendance Hub Widget (`PortalWidget.tsx`)**: Displays connected GMS status and direct links to QR Scan desk & Staff login.
+  - **Smart Member & Attendance Hub Widget (`PortalWidget.tsx`)**: Displays live connected GMS status and direct links to QR Scan desk & Staff login.
   - **Transformation Testimonials (`Testimonials.tsx`)**: Member success stories.
+  - **Footer (`Footer.tsx`)**: Full club address, interactive Google Maps directions link, hours, quick links, and GMS portals.
   - **Global Modals**:
     - `MemberPortalModal.tsx`: Real-time member verification querying live Neon DB data (no fake mocks). Automatically populated from Hero search.
-    - `TrialModal.tsx`: 3-Day VIP Free Pass form that registers prospective leads directly into the GMS `Lead` table.
+    - `TrialModal.tsx`: 3-Day VIP Free Pass form that registers prospective leads directly into the GMS `Lead` table with Dwarka branch tag.
 
 ---
 
@@ -50,6 +64,9 @@ This enterprise fitness platform comprises two tightly synchronized Next.js 15 a
   - `Lead`: Prospective free pass and trial inquiries (`PENDING`, `CONTACTED`, `CONVERTED`, `CANCELLED`).
   - `GymSettings`: Singleton configuration containing `gymName`, `defaultPricing` (`{"1": 1299, "3": 3300, "6": 6000, "12": 10800}`), `allowOnlineRenewals`, and `allowMemberPhotoUpdate`.
 
+- **Dynamic Attendance QR Scanner (`/dashboard/attendance/qr-display`)**:
+  - Dynamically extracts incoming request headers (`x-forwarded-host` / `host`) and `lib/utils/url.ts` to automatically generate the QR code pointing directly to `https://a3fitness-gms.vercel.app/scan` (or any custom domain).
+
 - **Member Self-Service Dashboard (`/member/[code]`)**:
   - **Top-Right Corner Member Avatar (`member-profile-card.tsx`)**: Touch/click opens member profile details modal.
   - **Profile Photo & Email Updates**: Members can upload/capture photos at any time (unless locked by Super Admin) and update their email address (**strictly restricted to `@gmail.com` addresses**).
@@ -62,7 +79,6 @@ This enterprise fitness platform comprises two tightly synchronized Next.js 15 a
   - Displays all 3-Day VIP Free Pass claimants with full name, contact phone, email, preferred slot, location, and claim date.
   - **Convert to Member Action**: Pre-fills the registration form at `/dashboard/members/new` with the lead's name, phone, and email, and updates lead status to `CONVERTED`.
   - **Delete Lead Action**: Allows deleting lead records.
-  - **Access Restriction**: Free pass claimants remain prospective leads and are not given active member dashboard access until officially converted.
 
 - **API Routes**:
   - `GET /api/portal/settings`: Public endpoint providing live suggested pricing and branding to `main_app`.
@@ -74,77 +90,72 @@ This enterprise fitness platform comprises two tightly synchronized Next.js 15 a
 
 ## 🔑 Environment Variables Reference
 
-### `main_app/.env.local`
+### `main_app/.env.production` (Vercel Direct Import)
 ```env
-# Connected Testing GMS Website URL
-NEXT_PUBLIC_GMS_BASE_URL=http://localhost:3000
+NEXT_PUBLIC_GMS_BASE_URL=https://a3fitness-gms.vercel.app
 GMS_API_SECRET=dev-secret-key
-
-# Member Portal URLs
-NEXT_PUBLIC_GMS_MEMBER_PORTAL_URL=http://localhost:3000/member
-NEXT_PUBLIC_GMS_STAFF_LOGIN_URL=http://localhost:3000/login
-NEXT_PUBLIC_GMS_ATTENDANCE_SCAN_URL=http://localhost:3000/scan
-
-# App Metadata
-NEXT_PUBLIC_CLUB_NAME=A3Fitness Gym & Spa
+NEXT_PUBLIC_GMS_MEMBER_PORTAL_URL=https://a3fitness-gms.vercel.app/member
+NEXT_PUBLIC_GMS_STAFF_LOGIN_URL=https://a3fitness-gms.vercel.app/login
+NEXT_PUBLIC_GMS_ATTENDANCE_SCAN_URL=https://a3fitness-gms.vercel.app/scan
+NEXT_PUBLIC_CLUB_NAME=A3Fitness Luxury Gym & Spa
 NEXT_PUBLIC_CLUB_PHONE=+91 98765 43210
 NEXT_PUBLIC_CLUB_EMAIL=concierge@a3fitness.in
-NEXT_PUBLIC_CLUB_CITY=Mumbai, India
+NEXT_PUBLIC_CLUB_CITY=New Delhi, India
+NEXT_PUBLIC_CLUB_ADDRESS=Opposite Aakash Healthcare, Gate No. 4, Sector 3, Dwarka, New Delhi 110059
 ```
 
-### `gms/.env`
+### `gms/.env` (GMS Production Configuration)
 ```env
-# Database (Neon PostgreSQL)
 DATABASE_URL="postgresql://neondb_owner:npg_Il1Px0hZuLfk@ep-divine-rain-ax3eku3i.c-4.us-east-2.aws.neon.tech/neondb?sslmode=require"
-
-# Auth / Session Secret
 SESSION_SECRET="sujalmohitprabhatanshu"
-
-# Super Admin Bootstrap Credentials
 SEED_SUPER_ADMIN_EMAIL="pradeep@yourgym.com"
 SEED_SUPER_ADMIN_PASSWORD="sujal123"
-
-# Cloudinary (Member Photos & PDF Invoices)
 CLOUDINARY_CLOUD_NAME="yp2wb7d6"
 CLOUDINARY_API_KEY="954934728883496"
-CLOUDINARY_API_SECRET="your_cloudinary_secret"
-
-# Optional Razorpay Online Renewal Keys
-RAZORPAY_KEY_ID=""
-RAZORPAY_KEY_SECRET=""
+CLOUDINARY_API_SECRET="X_6doOPGQg8JCdfGwFpHOapqJkE"
+APP_BASE_URL="https://a3fitness-gms.vercel.app"
+SMTP_HOST="smtp.gmail.com"
+SMTP_PORT="587"
+SMTP_USER="sujalkumar60846@gmail.com"
+SMTP_PASS="kcbv raaa feya otyp"
+SMTP_FROM="Pradeep Gym <sujalkumar60846@gmail.com>"
+SMTP_SECURE="false"
+CRON_SECRET="sujalmohitprabhatanshuankitamitrudramahi"
+CRON_TIMEZONE="Asia/Kolkata"
 ```
 
 ---
 
-## 🚀 Deployment & Git Configuration
+## 🚀 Deployment & Git Repositories
 
-### 1. `gms` Git Repository
-- **Remote URL**: `https://github.com/sujalkumar60846/a3fitness-gms.git`
-- **Branch**: `main`
-- **Initial Commit**: Staged and committed with message `feat: complete A3Fitness GMS system with trial leads, dynamic pricing, and attendance`.
-- **Push Command** (run in PowerShell):
+### 1. `gms` (Backend & Member Portal)
+- **Repository:** `https://github.com/sujalkumar60846/a3fitness-gms.git`
+- **Branch:** `main`
+- **Live Vercel URL:** `https://a3fitness-gms.vercel.app`
+- **Push Command:**
   ```powershell
   Set-Location "D:\gym project\gms"
-  git push -u origin main
+  git push origin main
   ```
 
-### 2. `main_app` Git Repository
-- **Target Remote**: `https://github.com/sujalkumar60846/a3fitness-web.git`
-- **Push Command** (run in PowerShell):
+### 2. `main_app` (Public Website)
+- **Repository:** `https://github.com/sujalkumar60846/a3fitness-web.git`
+- **Branch:** `main`
+- **Target Vercel URL:** `https://a3fitness-web.vercel.app`
+- **Push Command:**
   ```powershell
   Set-Location "D:\gym project\main_app"
-  git init
-  git add .
-  git commit -m "feat: A3Fitness frontend website with live GMS portal integration"
-  git branch -M main
   git remote add origin https://github.com/sujalkumar60846/a3fitness-web.git
   git push -u origin main
   ```
 
 ---
 
-## ⚡ Local Dev Port Mapping
-- **A3Fitness Web App**: `http://localhost:3001`
-- **GMS Admin & Leads Dashboard**: `http://localhost:3000/dashboard/leads`
-- **Member Self-Service Dashboard**: `http://localhost:3000/member/GYM-0001`
-- **Public Attendance QR Scanner**: `http://localhost:3000/scan`
+## ⚡ Production & Local URL Mapping
+| Feature / Page | Production URL | Local Dev URL |
+| :--- | :--- | :--- |
+| **A3Fitness Public Website** | `https://a3fitness-web.vercel.app` | `http://localhost:3001` |
+| **GMS Admin & Leads Dashboard** | `https://a3fitness-gms.vercel.app/dashboard/leads` | `http://localhost:3000/dashboard/leads` |
+| **Member Self-Service Portal** | `https://a3fitness-gms.vercel.app/member/GYM-0001` | `http://localhost:3000/member/GYM-0001` |
+| **Counter QR Attendance Scanner** | `https://a3fitness-gms.vercel.app/scan` | `http://localhost:3000/scan` |
+| **Admin QR Display Desk** | `https://a3fitness-gms.vercel.app/dashboard/attendance/qr-display` | `http://localhost:3000/dashboard/attendance/qr-display` |
