@@ -20,11 +20,11 @@ This enterprise fitness platform comprises two tightly synchronized Next.js 15 a
 ## 📍 Flagship Club Information
 - **Brand Title:** A3Fitness Luxury Gym & Spa
 - **Physical Address:** Opposite Aakash Healthcare, Gate No. 4, Sector 3, Dwarka, New Delhi – 110059
-- **Phone / Hotline:** +91 98765 43210
-- **Email:** concierge@a3fitness.in
+- **Phone / Hotline:** +91 95601 40568
+- **Email:** Pspradeepsharma752@gmail.com
 - **Operating Hours:**
   - Mon – Sat: 5:30 AM – 11:00 PM
-  - Sun: 6:00 AM – 9:00 PM
+  - Sun: 8:00 AM – 11:59 AM
 
 ---
 
@@ -98,8 +98,8 @@ NEXT_PUBLIC_GMS_MEMBER_PORTAL_URL=https://a3fitness-gms.vercel.app/member
 NEXT_PUBLIC_GMS_STAFF_LOGIN_URL=https://a3fitness-gms.vercel.app/login
 NEXT_PUBLIC_GMS_ATTENDANCE_SCAN_URL=https://a3fitness-gms.vercel.app/scan
 NEXT_PUBLIC_CLUB_NAME=A3Fitness Luxury Gym & Spa
-NEXT_PUBLIC_CLUB_PHONE=+91 98765 43210
-NEXT_PUBLIC_CLUB_EMAIL=concierge@a3fitness.in
+NEXT_PUBLIC_CLUB_PHONE=+91 95601 40568
+NEXT_PUBLIC_CLUB_EMAIL=Pspradeepsharma752@gmail.com
 NEXT_PUBLIC_CLUB_CITY=New Delhi, India
 NEXT_PUBLIC_CLUB_ADDRESS=Opposite Aakash Healthcare, Gate No. 4, Sector 3, Dwarka, New Delhi 110059
 ```
