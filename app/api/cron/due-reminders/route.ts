@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { sendDueReminder, toE164 } from "@/lib/whatsapp";
 import { sendEmailDueReminder } from "@/lib/email";
 import { formatCurrency, toCalendarDate } from "@/lib/utils/generators";
+import { getAppBaseUrl } from "@/lib/utils/url";
 
 export const maxDuration = 60; // seconds — bump on Vercel Pro if member count is large
 
@@ -36,7 +37,7 @@ export async function GET(req: NextRequest) {
 
   const gymSettings = await prisma.gymSettings.findUnique({ where: { id: "singleton" } });
   const gymName = gymSettings?.gymName || "Our Gym";
-  const appBaseUrl = process.env.APP_BASE_URL || "http://localhost:3000";
+  const appBaseUrl = getAppBaseUrl();
 
   const results = {
     whatsApp: { sent: 0, skipped: 0, failed: 0 },

@@ -7,6 +7,7 @@ import { requirePermission } from "@/lib/auth/rbac";
 import { uploadMemberPhoto, deleteCloudinaryAsset } from "@/lib/cloudinary";
 import { generateMemberCode, addMonths } from "@/lib/utils/generators";
 import { sendEmailWelcome } from "@/lib/email";
+import { getAppBaseUrl } from "@/lib/utils/url";
 import { Gender } from "@prisma/client";
 
 type ActionResult<T = undefined> = { success: true; data?: T } | { success: false; error: string };
@@ -83,7 +84,7 @@ export async function registerMember(
     if (member.email) {
       const gymSettings = await prisma.gymSettings.findUnique({ where: { id: "singleton" } });
       const gymName = gymSettings?.gymName || "Our Gym";
-      const appBaseUrl = process.env.APP_BASE_URL || "http://localhost:3000";
+      const appBaseUrl = getAppBaseUrl();
       const portalUrl = `${appBaseUrl}/member/${member.memberCode}`;
 
       sendEmailWelcome({

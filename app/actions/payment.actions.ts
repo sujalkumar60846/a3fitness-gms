@@ -10,6 +10,7 @@ import { sendPaymentConfirmation, sendDueReminder, toE164 } from "@/lib/whatsapp
 import { sendEmailPaymentConfirmation, sendEmailDueReminder } from "@/lib/email";
 import { createRazorpayOrder, verifyRazorpaySignature, getRazorpayKeyId } from "@/lib/razorpay";
 import { generateInvoiceNumber, addMonths, formatCurrency } from "@/lib/utils/generators";
+import { getAppBaseUrl } from "@/lib/utils/url";
 
 type ActionResult<T = undefined> = { success: true; data?: T } | { success: false; error: string };
 
@@ -460,7 +461,7 @@ export async function sendManualDueReminder(memberId: string): Promise<
 
     const gymSettings = await prisma.gymSettings.findUnique({ where: { id: "singleton" } });
     const gymName = gymSettings?.gymName || "Our Gym";
-    const appBaseUrl = process.env.APP_BASE_URL || "http://localhost:3000";
+    const appBaseUrl = getAppBaseUrl();
     const payOnlineUrl = `${appBaseUrl}/member/${member.memberCode}`;
 
     const formattedDueDate = latestSub.dueDate.toLocaleDateString("en-IN", {
