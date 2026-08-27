@@ -1,0 +1,330 @@
+// ============================================================================
+// Gym Management System — Prisma Schema
+// ============================================================================
+// Notes on design decisions:
+// - `User` = internal staff/admin accounts that LOG IN to the dashboard.
+// - `Member` = gym members. They do NOT have passwords; they authenticate via
+//   Member Code lookup (QR flow) — see auth notes in lib/auth/session.ts.
+// - Attendance uniqueness per day is enforced at the DB level via a
+//   @@unique([memberId, date]) constraint — this is the source of truth for
+//   "single check-in per day", not just application logic.
+// - `WhatsAppLog` & `EmailLog` exist purely to make notification cron jobs idempotent:
+//   if the cron fires twice in one day (retries, redeploys), we never double-send.
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------------------------------
+// ENUMS
+// ----------------------------------------------------------------------------
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  STAFF
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum AttendanceMethod {
+  QR
+  MANUAL
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  UPI
+  ONLINE_RAZORPAY
+  BANK_TRANSFER
+  OTHER
+}
+
+enum WhatsAppMessageType {
+  DUE_REMINDER
+  PAYMENT_CONFIRMATION
+  WELCOME
+}
+
+enum WhatsAppStatus {
+  SENT
+  FAILED
+  QUEUED
+}
+
+enum EmailMessageType {
+  DUE_REMINDER
+  PAYMENT_CONFIRMATION
+  WELCOME
+}
+
+enum EmailStatus {
+  SENT
+  FAILED
+  QUEUED
+}
+
+// ----------------------------------------------------------------------------
+// STAFF / ADMIN ACCOUNTS  (dashboard login)
+// ----------------------------------------------------------------------------
+
+model User {
+  id           String     @id @default(cuid())
+  name         String
+  email        String     @unique
+  phone        String?    @unique
+  passwordHash String
+  role         Role       @default(STAFF)
+  status       UserStatus @default(ACTIVE)
+
+  // Self-relation: who created/promoted this user (Super Admin audit trail)
+  createdById  String?
+  createdBy    User?      @relation("UserCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdUsers User[]     @relation("UserCreatedBy")
+
+  // Reverse relations for audit / attribution
+  membersRegistered Member[]      @relation("MemberRegisteredBy")
+  attendanceMarked  Attendance[]  @relation("AttendanceMarkedBy")
+  paymentsCollected Payment[]     @relation("PaymentCollectedBy")
+
+  lastLoginAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([role, status])
+}
+
+// ----------------------------------------------------------------------------
+// MEMBERS
+// ----------------------------------------------------------------------------
+
+model Member {
+  id               String   @id @default(cuid())
+  memberCode       String   @unique // unpredictable or custom ID e.g. "GYM-8K4W9P", used for QR + self-lookup
+  fullName         String
+  email            String?  // for receipts, reminders, and welcome notifications
+  phone            String   @unique
+  emergencyContact String
+  gender           Gender
+  dateOfBirth      DateTime?
+  address          String?
+  photoUrl         String? // Cloudinary secure_url
+  photoPublicId    String? // Cloudinary public_id, needed to delete/replace the asset
+
+  joiningDate DateTime @default(now()) // Custom joining date / Member Since (crucial for existing gym clients)
+  isActive    Boolean  @default(true)  // soft "deactivated" flag — distinct from subscription expiry
+
+  registeredById String
+  registeredBy   User   @relation("MemberRegisteredBy", fields: [registeredById], references: [id], onDelete: Restrict)
+
+  subscriptions Subscription[]
+  payments      Payment[]
+  attendances   Attendance[]
+  whatsAppLogs  WhatsAppLog[]
+  emailLogs     EmailLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([fullName])
+  @@index([isActive])
+  @@index([joiningDate])
+}
+
+// ----------------------------------------------------------------------------
+// SUBSCRIPTIONS (one row per plan period; history preserved on renewal)
+// ----------------------------------------------------------------------------
+
+model Subscription {
+  id         String             @id @default(cuid())
+  memberId   String
+  member     Member             @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  planMonths Int // 1, 3, 6, 12
+  feeAmount  Decimal            @db.Decimal(10, 2)
+  startDate  DateTime
+  dueDate    DateTime // renewal / expiry date
+  status     SubscriptionStatus @default(ACTIVE)
+
+  payments Payment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Only one ACTIVE subscription should exist per member at a time —
+  // enforced in application logic (renewals create a new row + expire the old one).
+  @@index([memberId, status])
+  @@index([dueDate])
+}
+
+// ----------------------------------------------------------------------------
+// PAYMENTS / INVOICES
+// ----------------------------------------------------------------------------
+
+model Payment {
+  id             String        @id @default(cuid())
+  invoiceNumber  String        @unique // e.g. INV-2026-000123
+  memberId       String
+  member         Member        @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  subscriptionId String
+  subscription   Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+
+  amount         Decimal       @db.Decimal(10, 2)
+  method         PaymentMethod
+  invoiceUrl     String? // Cloudinary URL of the generated PDF
+
+  // Razorpay Gateway fields (for online member self-payments)
+  razorpayOrderId   String?
+  razorpayPaymentId String?
+  razorpaySignature String?
+
+  collectedById String? // null when paid online directly by member
+  collectedBy   User?   @relation("PaymentCollectedBy", fields: [collectedById], references: [id], onDelete: SetNull)
+
+  paidAt    DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  @@index([memberId])
+  @@index([paidAt])
+}
+
+// ----------------------------------------------------------------------------
+// ATTENDANCE
+// ----------------------------------------------------------------------------
+
+model Attendance {
+  id       String           @id @default(cuid())
+  memberId String
+  member   Member           @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  date        DateTime         @db.Date // calendar day, normalized to 00:00 UTC — see attendance.actions.ts
+  checkInTime DateTime         @default(now())
+  method      AttendanceMethod @default(QR)
+
+  markedById String? // set when a staff member manually marks attendance
+  markedBy   User?   @relation("AttendanceMarkedBy", fields: [markedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  // THE core constraint: one check-in per member per calendar day.
+  @@unique([memberId, date])
+  @@index([date])
+}
+
+// ----------------------------------------------------------------------------
+// WHATSAPP SEND LOG (idempotency + audit trail for notifications)
+// ----------------------------------------------------------------------------
+
+model WhatsAppLog {
+  id       String              @id @default(cuid())
+  memberId String
+  member   Member              @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  type         WhatsAppMessageType
+  date         DateTime            @db.Date // day this notification corresponds to
+  status       WhatsAppStatus
+  waMessageId  String? // Meta's message id, for delivery-status webhooks
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+
+  // Prevents sending the same reminder type to the same member twice in one day.
+  @@unique([memberId, type, date])
+}
+
+// ----------------------------------------------------------------------------
+// EMAIL SEND LOG (idempotency + audit trail for email notifications)
+// ----------------------------------------------------------------------------
+
+model EmailLog {
+  id       String           @id @default(cuid())
+  memberId String
+  member   Member           @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  type         EmailMessageType
+  date         DateTime         @db.Date
+  status       EmailStatus
+  messageId    String?
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+
+  // Prevents duplicate emails for the same trigger on the same day.
+  @@unique([memberId, type, date])
+}
+
+// ----------------------------------------------------------------------------
+// GYM SETTINGS (singleton row — branding used on invoices / WhatsApp templates)
+// ----------------------------------------------------------------------------
+
+model GymSettings {
+  id            String  @id @default("singleton")
+  gymName       String
+  addressLine   String
+  phone         String
+  email         String
+  logoUrl       String?
+  gstNumber     String?
+  invoicePrefix String  @default("INV")
+  allowOnlineRenewals Boolean @default(false)
+  allowMemberPhotoUpdate Boolean @default(true)
+
+  // Suggested price per plan duration, e.g. {"1": 1200, "3": 3300, "6": 6000, "12": 10800}.
+  // Purely a UI convenience to auto-fill the fee field — every registration
+  // and payment still stores its OWN amount (Member.fee / Payment.amount),
+  // so staff can always charge more or less for an individual member.
+  defaultPricing Json?
+
+  updatedAt     DateTime @updatedAt
+}
+
+// ----------------------------------------------------------------------------
+// TRIAL LEADS (Free Pass claims from website / public inquiries)
+// ----------------------------------------------------------------------------
+
+enum LeadStatus {
+  PENDING
+  CONTACTED
+  CONVERTED
+  CANCELLED
+}
+
+model Lead {
+  id            String     @id @default(cuid())
+  fullName      String
+  email         String?
+  phone         String
+  preferredTime String?
+  location      String?
+  inquiryType   String     @default("Free Trial Pass")
+  status        LeadStatus @default(PENDING)
+  notes         String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+}
+
