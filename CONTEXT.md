@@ -1,6 +1,6 @@
 # A3Fitness & Gym Management System (GMS) — Complete Project Context & Architecture
 
-**Last Updated:** August 27, 2026  
+**Last Updated:** August 30, 2026  
 **Status:** Production Ready & Deployed on Vercel
 
 ---
@@ -13,7 +13,7 @@ This enterprise fitness platform comprises two tightly synchronized Next.js 15 a
    - Physical Location: **Opposite Aakash Healthcare, Gate No. 4, Sector 3, Dwarka, New Delhi 110059**.
 2. **`gms`** (Gym Management System & Member Portal — Production URL: `https://a3fitness-gms.vercel.app` | Port `3000` in Dev):
    - Comprehensive backend and administration platform powered by **Prisma ORM** and **PostgreSQL (Neon Cloud DB)**.
-   - Multi-role RBAC (`SUPER_ADMIN`, `ADMIN`, `STAFF`), member directory, dynamic QR attendance check-in desk, trial leads CRM with one-click member conversion, Cloudinary photo uploads, auto-generated PDF invoices, email notifications, and self-service member dashboards.
+   - Multi-role RBAC (`SUPER_ADMIN`, `ADMIN`, `STAFF`), member directory, dynamic QR attendance check-in desk, trial leads CRM with one-click member conversion, Cloudinary photo uploads, auto-generated PDF invoices, email notifications, audit logging trail, and persistent self-service member portals.
 
 ---
 
@@ -62,17 +62,33 @@ This enterprise fitness platform comprises two tightly synchronized Next.js 15 a
   - `Payment`: Invoice numbering (`INV-YYYY-XXXXXX`), Cloudinary PDF invoice URLs, amounts.
   - `Attendance`: Daily attendance with database-level uniqueness constraint (`@@unique([memberId, date])`).
   - `Lead`: Prospective free pass and trial inquiries (`PENDING`, `CONTACTED`, `CONVERTED`, `CANCELLED`).
-  - `GymSettings`: Singleton configuration containing `gymName`, `defaultPricing` (`{"1": 1299, "3": 3300, "6": 6000, "12": 10800}`), `allowOnlineRenewals`, and `allowMemberPhotoUpdate`.
+  - `GymSettings`: Singleton configuration containing `gymName`, `addressLine`, `phone`, `email`, `gstNumber`, `invoicePrefix`, `defaultPricing`, `allowOnlineRenewals`, `allowMemberPhotoUpdate`, and `allowMemberEmailUpdate`.
+  - `AuditLog`: Security and activity trail recording `action`, `category`, `actorName`, `actorRole`, `targetName`, `details`, and timestamps.
 
 - **Dynamic Attendance QR Scanner (`/dashboard/attendance/qr-display`)**:
   - Dynamically extracts incoming request headers (`x-forwarded-host` / `host`) and `lib/utils/url.ts` to automatically generate the QR code pointing directly to `https://a3fitness-gms.vercel.app/scan` (or any custom domain).
 
-- **Member Self-Service Dashboard (`/member/[code]`)**:
-  - **Top-Right Corner Member Avatar (`member-profile-card.tsx`)**: Touch/click opens member profile details modal.
-  - **Profile Photo & Email Updates**: Members can upload/capture photos at any time (unless locked by Super Admin) and update their email address (**strictly restricted to `@gmail.com` addresses**).
-  - **Super Admin Lock Control**: Super Admin can toggle `allowMemberPhotoUpdate` in `/dashboard/settings` to prevent members from modifying their photos.
-  - **One-Click Daily Attendance (`member-attendance-button.tsx`)**: Prominent attendance button on dashboard that records check-in for the day and transitions to `✓ Attendance Marked For Today (Checked in at HH:MM)`.
+- **Member Authentication & Self-Service Portal (`/member` & `/member/[code]`)**:
+  - **2-Field Login (`app/member/member-lookup-form.tsx`)**: Members authenticate by entering their **Registered Mobile Number** and **4-Digit Unique ID / PIN** (e.g. `0001` from `GYM-0001`).
+  - **Persistent Sessions**: Once logged in, a 1-year persistent session cookie (`gym_member_session`) keeps them logged in on their device with auto-redirect to their dashboard.
+  - **Manual Logout**: Dedicated **"Log Out"** button (`member-logout-button.tsx`) on dashboard allows logging out at any time.
+  - **Profile Photo & Gmail Updates**: Members can upload photos and link/update their `@gmail.com` address. Linking Gmail automatically triggers a confirmation welcome email and enables SMTP invoice delivery.
+  - **Super Admin Lock Controls**: Super Admin can independently toggle `allowMemberPhotoUpdate` and `allowMemberEmailUpdate` in `/dashboard/settings`.
+  - **One-Click Daily Attendance (`member-attendance-button.tsx`)**: Records check-in for the day and transitions to `✓ Attendance Marked For Today (Checked in at HH:MM)`.
   - **Plan Expiry & Invoices**: Shows plan validity countdown, downloadable tax invoices, and attendance streak insights.
+
+- **Role-Based Staff & Password Management (`/dashboard/staff-management`)**:
+  - **`SUPER_ADMIN`**: Can set permanent passwords for **all Staff**, **all Admins**, and **Super Admin** accounts without requiring current passwords. Can change roles, suspend/reactivate, and delete accounts.
+  - **`ADMIN`**: Can change their **own password** (via `/dashboard/account`) and set permanent passwords for **all Desk Staff** members. Cannot modify `SUPER_ADMIN` or other `ADMIN` passwords.
+  - **`STAFF`**: Can **only change their own password** in `/dashboard/account`. Blocked from accessing `/dashboard/staff-management`.
+
+- **Activity & Audit Trail (`/dashboard/analytics` -> "Activity & Audit Logs" tab)**:
+  - Accessible to Super Admin & Admin to track:
+    - 🔒 **Security & Passwords**: Password changes and administrative permanent password resets.
+    - ⚙️ **Gym Settings**: Modifications to branding, address, pricing, or lock toggles.
+    - 👥 **Staff Management**: Account creations, role changes, suspensions, and deletions.
+    - 👤 **Member Self-Service**: Member logins, photo uploads, and Gmail updates.
+  - Includes real-time search, category filters (`SECURITY`, `SETTINGS`, `MEMBER`, `STAFF`), actor attribution, and timestamps.
 
 - **Trial Leads CRM (`/dashboard/leads`)**:
   - Accessible to **Super Admin**, **Admin**, and **Staff**.
@@ -81,7 +97,7 @@ This enterprise fitness platform comprises two tightly synchronized Next.js 15 a
   - **Delete Lead Action**: Allows deleting lead records.
 
 - **API Routes**:
-  - `GET /api/portal/settings`: Public endpoint providing live suggested pricing and branding to `main_app`.
+  - `GET /api/portal/settings`: Public endpoint providing live suggested pricing, branding, and permissions to `main_app`.
   - `GET /api/portal/member/[code]`: Public endpoint returning real database profile data for valid member IDs (returns 404 for invalid IDs without fake fallbacks).
   - `POST /api/leads`: Public endpoint accepting free pass submissions from `main_app`.
   - `POST /api/attendance/checkin`: Public QR scan endpoint for front desk check-in.
@@ -145,8 +161,7 @@ CRON_TIMEZONE="Asia/Kolkata"
 - **Push Command:**
   ```powershell
   Set-Location "D:\gym project\main_app"
-  git remote add origin https://github.com/sujalkumar60846/a3fitness-web.git
-  git push -u origin main
+  git push origin main
   ```
 
 ---
@@ -156,6 +171,9 @@ CRON_TIMEZONE="Asia/Kolkata"
 | :--- | :--- | :--- |
 | **A3Fitness Public Website** | `https://a3fitness-web.vercel.app` | `http://localhost:3001` |
 | **GMS Admin & Leads Dashboard** | `https://a3fitness-gms.vercel.app/dashboard/leads` | `http://localhost:3000/dashboard/leads` |
-| **Member Self-Service Portal** | `https://a3fitness-gms.vercel.app/member/GYM-0001` | `http://localhost:3000/member/GYM-0001` |
+| **Member Login & Portal** | `https://a3fitness-gms.vercel.app/member` | `http://localhost:3000/member` |
+| **Super Admin Audit & Analytics** | `https://a3fitness-gms.vercel.app/dashboard/analytics` | `http://localhost:3000/dashboard/analytics` |
+| **Staff & Password Management** | `https://a3fitness-gms.vercel.app/dashboard/staff-management` | `http://localhost:3000/dashboard/staff-management` |
+| **Gym System Settings** | `https://a3fitness-gms.vercel.app/dashboard/settings` | `http://localhost:3000/dashboard/settings` |
 | **Counter QR Attendance Scanner** | `https://a3fitness-gms.vercel.app/scan` | `http://localhost:3000/scan` |
 | **Admin QR Display Desk** | `https://a3fitness-gms.vercel.app/dashboard/attendance/qr-display` | `http://localhost:3000/dashboard/attendance/qr-display` |
