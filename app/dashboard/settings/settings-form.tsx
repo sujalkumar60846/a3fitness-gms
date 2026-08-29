@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Loader2, CheckCircle2, AlertCircle, Save, Mail, Send, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +36,7 @@ const EMPTY_SETTINGS: Settings = {
 };
 
 export function SettingsForm({ initialSettings }: { initialSettings: Settings | null }) {
+  const router = useRouter();
   const [settings, setSettings] = useState<Settings>(initialSettings ?? EMPTY_SETTINGS);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ type: "success" | "error"; message: string } | null>(null);
@@ -42,6 +44,12 @@ export function SettingsForm({ initialSettings }: { initialSettings: Settings | 
   const [testEmailAddress, setTestEmailAddress] = useState("");
   const [testingEmail, setTestingEmail] = useState(false);
   const [testResult, setTestResult] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  useEffect(() => {
+    if (initialSettings) {
+      setSettings(initialSettings);
+    }
+  }, [initialSettings]);
 
   function updateField<K extends keyof Settings>(key: K, value: Settings[K]) {
     setSettings((prev) => ({ ...prev, [key]: value }));
@@ -83,11 +91,12 @@ export function SettingsForm({ initialSettings }: { initialSettings: Settings | 
     const res = await updateGymSettings(settings);
     setSubmitting(false);
 
-    setResult(
-      res.success
-        ? { type: "success", message: "Settings saved." }
-        : { type: "error", message: res.error }
-    );
+    if (res.success) {
+      setResult({ type: "success", message: "Settings saved successfully! Changes are permanently active." });
+      router.refresh();
+    } else {
+      setResult({ type: "error", message: res.error });
+    }
   }
 
   return (

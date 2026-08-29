@@ -60,11 +60,19 @@ export function StaffRow({
   const canModifyAccount = isSuperAdmin && !isCurrentUser && staff.role !== "SUPER_ADMIN";
 
   // 2. Who can reset passwords:
-  // - Super Admin can reset STAFF and ADMIN (and self)
-  // - Admin can reset STAFF only (never ADMIN or SUPER_ADMIN)
+  // - Super Admin can reset ALL passwords (Staff, Admin, and Super Admin)
+  // - Admin can reset Staff passwords and own account
+  // - Admin CANNOT reset Super Admin or other Admins
   const canResetPassword =
-    (isSuperAdmin && (staff.role !== "SUPER_ADMIN" || isCurrentUser)) ||
-    (isAdmin && staff.role === "STAFF");
+    isSuperAdmin ||
+    (isAdmin && (staff.role === "STAFF" || isCurrentUser));
+
+  const passwordDisabledReason =
+    isAdmin && staff.role === "SUPER_ADMIN"
+      ? "Admins cannot change Super Admin passwords"
+      : isAdmin && staff.role === "ADMIN" && !isCurrentUser
+      ? "Admins cannot change passwords for other Admins"
+      : "Password changes not permitted";
 
   async function handleRoleChange(newRole: "ADMIN" | "STAFF") {
     setLoading("role");
@@ -119,8 +127,9 @@ export function StaffRow({
     if (res.success) {
       setResetFeedback({
         type: "success",
-        message: `Password updated successfully. Share "${newPassword}" with ${staff.name} securely.`,
+        message: `Permanent password set successfully! ${staff.name} can log in with "${newPassword}" immediately.`,
       });
+      router.refresh();
     } else {
       setResetFeedback({ type: "error", message: res.error });
     }
@@ -190,21 +199,17 @@ export function StaffRow({
               <button
                 onClick={openResetModal}
                 disabled={loading !== null}
-                title={`Reset password for ${staff.name}`}
+                title={`Set permanent password for ${staff.name}`}
                 className="rounded-md p-1.5 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 transition-colors disabled:opacity-40"
               >
                 <KeyRound className="h-4 w-4" />
               </button>
             ) : (
               <span
-                title={
-                  isAdmin
-                    ? "Admins can only change passwords for Staff members"
-                    : "Password changes disabled for this account"
-                }
+                title={passwordDisabledReason}
                 className="p-1.5 text-zinc-300 cursor-not-allowed"
               >
-                <KeyRound className="h-4 w-4 opacity-40" />
+                <KeyRound className="h-4 w-4 opacity-30" />
               </span>
             )}
 
@@ -264,9 +269,9 @@ export function StaffRow({
                       <KeyRound className="h-4 w-4" />
                     </div>
                     <div>
-                      <h3 className="text-base font-semibold text-zinc-900">Change Staff Password</h3>
+                      <h3 className="text-base font-semibold text-zinc-900">Set Permanent Password</h3>
                       <p className="text-xs text-zinc-500">
-                        {staff.name} ({staff.email})
+                        {staff.name} ({staff.email}) · <span className="font-medium text-zinc-700">{staff.role}</span>
                       </p>
                     </div>
                   </div>
@@ -298,7 +303,7 @@ export function StaffRow({
 
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="newStaffPassword">New Password</Label>
+                      <Label htmlFor="newStaffPassword">New Permanent Password</Label>
                       <span className="text-xs text-zinc-400">Min. 8 characters</span>
                     </div>
 
@@ -311,7 +316,7 @@ export function StaffRow({
                           onChange={(e) => setNewPassword(e.target.value)}
                           required
                           minLength={8}
-                          placeholder="Enter new password"
+                          placeholder="Enter new permanent password"
                           className="pr-10"
                         />
                         <button
@@ -349,7 +354,7 @@ export function StaffRow({
                   <div className="rounded-lg bg-zinc-50 p-3 text-xs text-zinc-600 border border-zinc-100 flex items-start gap-2">
                     <Shield className="h-4 w-4 text-zinc-500 shrink-0 mt-0.5" />
                     <span>
-                      The user will be able to log in with this new password immediately and can update it later from their My Account page.
+                      This permanently overrides the user&apos;s password. They will be able to log in with this new password immediately.
                     </span>
                   </div>
 
@@ -365,10 +370,10 @@ export function StaffRow({
                     <Button type="submit" disabled={loading === "password"}>
                       {loading === "password" ? (
                         <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving…
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Updating…
                         </>
                       ) : (
-                        "Update Password"
+                        "Save Permanent Password"
                       )}
                     </Button>
                   </div>

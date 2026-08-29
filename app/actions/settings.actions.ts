@@ -21,17 +21,16 @@ export async function getGymSettings() {
 }
 
 const updateSettingsSchema = z.object({
-  gymName: z.string().min(2).max(100),
-  addressLine: z.string().min(2).max(200),
-  phone: z.string().min(5).max(20),
-  email: z.string().email(),
-  gstNumber: z.string().max(20).optional().or(z.literal("")),
-  invoicePrefix: z.string().min(1).max(10),
+  gymName: z.string().trim().min(2, "Gym name must be at least 2 characters").max(100),
+  addressLine: z.string().trim().min(2, "Address must be at least 2 characters").max(200),
+  phone: z.string().trim().min(5, "Phone must be at least 5 digits").max(20),
+  email: z.string().trim().email("Please enter a valid email address"),
+  gstNumber: z.string().trim().max(30).optional().nullable().or(z.literal("")).transform((v) => (v ? v : null)),
+  invoicePrefix: z.string().trim().min(1, "Invoice prefix is required").max(10),
   allowOnlineRenewals: z.boolean().default(false),
   allowMemberPhotoUpdate: z.boolean().default(true),
-  // Keys are plan-month strings ("1"/"3"/"6"/"12") — a suggestion only,
-  // never enforced. Every member/payment still stores its own fee amount.
-  defaultPricing: z.record(z.string(), z.number().nonnegative()),
+  // Keys are plan-month strings ("1"/"3"/"6"/"12") — suggested pricing
+  defaultPricing: z.record(z.string(), z.number().nonnegative()).optional().default({}),
 });
 
 export async function updateGymSettings(
@@ -43,18 +42,41 @@ export async function updateGymSettings(
 
     await prisma.gymSettings.upsert({
       where: { id: "singleton" },
-      create: { id: "singleton", ...parsed },
-      update: parsed,
+      create: {
+        id: "singleton",
+        gymName: parsed.gymName,
+        addressLine: parsed.addressLine,
+        phone: parsed.phone,
+        email: parsed.email,
+        gstNumber: parsed.gstNumber,
+        invoicePrefix: parsed.invoicePrefix,
+        allowOnlineRenewals: parsed.allowOnlineRenewals,
+        allowMemberPhotoUpdate: parsed.allowMemberPhotoUpdate,
+        defaultPricing: parsed.defaultPricing,
+      },
+      update: {
+        gymName: parsed.gymName,
+        addressLine: parsed.addressLine,
+        phone: parsed.phone,
+        email: parsed.email,
+        gstNumber: parsed.gstNumber,
+        invoicePrefix: parsed.invoicePrefix,
+        allowOnlineRenewals: parsed.allowOnlineRenewals,
+        allowMemberPhotoUpdate: parsed.allowMemberPhotoUpdate,
+        defaultPricing: parsed.defaultPricing,
+      },
     });
 
     revalidatePath("/dashboard/settings");
     revalidatePath("/dashboard/members/new");
     revalidatePath("/dashboard/payments/new");
+    revalidatePath("/dashboard/broadcast");
+    revalidatePath("/api/portal/settings");
     return { success: true };
   } catch (err) {
     if (err instanceof z.ZodError) return { success: false, error: err.errors.map((e) => e.message).join(", ") };
     if (err instanceof Error) return { success: false, error: err.message };
-    return { success: false, error: "Something went wrong." };
+    return { success: false, error: "Something went wrong saving settings." };
   }
 }
 

@@ -6,6 +6,9 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { ChangePasswordForm } from "./change-password-form";
 import { formatDate } from "@/lib/utils/formatters";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function AccountPage() {
   const session = await getSession();
   if (!session) redirect("/login");

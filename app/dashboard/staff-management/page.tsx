@@ -7,6 +7,9 @@ import { listStaff } from "@/app/actions/staff.actions";
 import { StaffRow } from "@/components/dashboard/staff-row";
 import { Button } from "@/components/ui/button";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function StaffManagementPage() {
   const session = await getSession();
   if (!session) redirect("/login");

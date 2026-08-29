@@ -4,6 +4,9 @@ import { hasRole } from "@/lib/auth/rbac";
 import { getGymSettings } from "@/app/actions/settings.actions";
 import { SettingsForm } from "./settings-form";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function SettingsPage() {
   const session = await getSession();
   if (!session) redirect("/login");

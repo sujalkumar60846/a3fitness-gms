@@ -161,22 +161,31 @@ export async function resetStaffPassword(
     if (!target) return { success: false, error: "User not found." };
 
     // RBAC Hierarchy Rules:
-    // 1. Admin can ONLY reset passwords for Staff members
-    if (session.role === "ADMIN" && target.role !== "STAFF") {
+    // 1. Staff cannot use administrative reset
+    if (session.role === "STAFF") {
       return {
         success: false,
-        error: "Admins are only permitted to change passwords for Staff members.",
+        error: "Desk Staff members can only change their own password in My Account.",
       };
     }
 
-    // 2. Super Admin can reset Staff and Admin passwords.
-    // If target is another Super Admin, reject administrative override.
-    if (session.role === "SUPER_ADMIN" && target.role === "SUPER_ADMIN" && target.id !== session.userId) {
-      return {
-        success: false,
-        error: "Cannot reset another Super Admin's password. Use Account Settings for self-service password changes.",
-      };
+    // 2. Admin can ONLY reset passwords for Staff members and their own account
+    if (session.role === "ADMIN") {
+      if (target.role === "SUPER_ADMIN") {
+        return {
+          success: false,
+          error: "Admins are not authorized to change Super Admin passwords.",
+        };
+      }
+      if (target.role === "ADMIN" && target.id !== session.userId) {
+        return {
+          success: false,
+          error: "Admins can only change passwords for Desk Staff members and their own account.",
+        };
+      }
     }
+
+    // 3. Super Admin can permanently set passwords for ALL accounts (Super Admin, Admin, and Staff).
 
     const passwordHash = await bcrypt.hash(parsed.newPassword, 12);
     await prisma.user.update({
@@ -185,6 +194,7 @@ export async function resetStaffPassword(
     });
 
     revalidatePath("/dashboard/staff-management");
+    revalidatePath("/dashboard/account");
     return { success: true };
   } catch (err) {
     return { success: false, error: errorMessage(err) };
