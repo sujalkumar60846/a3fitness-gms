@@ -1,12 +1,161 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { toCalendarDate } from "@/lib/utils/generators";
 import { Prisma } from "@prisma/client";
+import { logAuditEvent } from "@/lib/audit";
+import { sendEmailWelcome } from "@/lib/email";
 import { z } from "zod";
 
 type ActionResult<T = undefined> = { success: true; data?: T; message?: string } | { success: false; error: string };
+
+const MEMBER_SESSION_COOKIE = "gym_member_session";
+
+/**
+ * MEMBER LOGIN via Registered Mobile Number + 4-digit Unique ID / PIN.
+ * Sets a persistent session cookie valid for 1 year until manual logout.
+ */
+export async function loginMemberWithPhoneAndPin({
+  phone,
+  pinOrCode,
+}: {
+  phone: string;
+  pinOrCode: string;
+}): Promise<ActionResult<{ memberCode: string; name: string }>> {
+  try {
+    const rawPhone = phone.trim().replace(/\D/g, ""); // extract only digits
+    if (rawPhone.length < 10) {
+      return { success: false, error: "Please enter a valid 10-digit registered mobile number." };
+    }
+
+    const cleanPin = pinOrCode.trim().toUpperCase();
+    if (!cleanPin) {
+      return { success: false, error: "Please enter your 4-digit Unique ID / PIN." };
+    }
+
+    const tenDigitPhone = rawPhone.slice(-10);
+
+    // Search members matching the phone number (either exact or ends with 10 digits)
+    const candidates = await prisma.member.findMany({
+      where: {
+        OR: [
+          { phone: { endsWith: tenDigitPhone } },
+          { phone: { equals: phone.trim() } },
+        ],
+      },
+      select: {
+        id: true,
+        fullName: true,
+        memberCode: true,
+        phone: true,
+        isActive: true,
+      },
+    });
+
+    if (candidates.length === 0) {
+      return {
+        success: false,
+        error: "No member account found with this mobile number. Please check your number or contact reception.",
+      };
+    }
+
+    // Verify 4-digit unique code / PIN against memberCode
+    const member = candidates.find((m) => {
+      const code = m.memberCode.toUpperCase();
+      const codeDigits = code.replace(/\D/g, "");
+      const last4Chars = code.slice(-4);
+      const last4Digits = codeDigits.slice(-4);
+
+      return (
+        code === cleanPin ||
+        last4Chars === cleanPin ||
+        last4Digits === cleanPin ||
+        codeDigits === cleanPin ||
+        code.endsWith(cleanPin)
+      );
+    });
+
+    if (!member) {
+      return {
+        success: false,
+        error: "Invalid 4-digit Unique ID. (Tip: Use the 4 digits or last 4 characters of your Member Code, e.g. '0001' from 'GYM-0001').",
+      };
+    }
+
+    // Set persistent session cookie (valid for 1 year)
+    const sessionData = JSON.stringify({
+      memberCode: member.memberCode,
+      phone: member.phone,
+      fullName: member.fullName,
+      loginAt: new Date().toISOString(),
+    });
+
+    const cookieStore = await cookies();
+    cookieStore.set(MEMBER_SESSION_COOKIE, sessionData, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 365 * 24 * 60 * 60, // 1 year persistence
+      path: "/",
+    });
+
+    // Log audit event
+    await logAuditEvent({
+      action: "MEMBER_LOGGED_IN",
+      category: "MEMBER",
+      actorName: `${member.fullName} (${member.memberCode})`,
+      actorRole: "MEMBER",
+      targetName: member.memberCode,
+      details: `Member logged in via registered mobile (${member.phone}) and verified 4-digit PIN.`,
+    });
+
+    return {
+      success: true,
+      data: {
+        memberCode: member.memberCode,
+        name: member.fullName,
+      },
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Authentication failed. Please try again.",
+    };
+  }
+}
+
+/**
+ * MEMBER LOGOUT — Destroys persistent session cookie.
+ */
+export async function logoutMember(): Promise<ActionResult> {
+  try {
+    const cookieStore = await cookies();
+    cookieStore.delete(MEMBER_SESSION_COOKIE);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: "Logout failed" };
+  }
+}
+
+/**
+ * Checks if the current browser session has a logged-in member.
+ */
+export async function getAuthenticatedMemberSession(): Promise<{
+  memberCode: string;
+  phone: string;
+  fullName: string;
+} | null> {
+  try {
+    const cookieStore = await cookies();
+    const raw = cookieStore.get(MEMBER_SESSION_COOKIE)?.value;
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * PUBLIC lookup — Returns member profile & dashboard data.
@@ -44,8 +193,10 @@ export async function getMemberDashboardByCode(memberCode: string) {
 
 /**
  * PUBLIC self-service profile update:
- * - Updates photo (if enabled by Super Admin in GymSettings)
- * - Updates email (strictly restricted to @gmail.com)
+ * - Updates photo (if enabled by Super Admin in GymSettings via allowMemberPhotoUpdate)
+ * - Updates email (if enabled by Super Admin via allowMemberEmailUpdate, strictly restricted to @gmail.com)
+ * - Auto-dispatches welcome/notification email via SMTP upon adding Gmail
+ * - Creates an Audit Log entry for Super Admin tracking
  */
 export async function updateMemberProfileByCode({
   memberCode,
@@ -78,10 +229,20 @@ export async function updateMemberProfileByCode({
       }
     }
 
-    // 2. Email update validation (GMAIL ONLY requirement)
+    // 2. Email update validation (GMAIL ONLY requirement + Admin Lock Control)
     let cleanEmail: string | null | undefined = undefined;
+    const isEmailChanging = email !== undefined && email?.trim().toLowerCase() !== (member.email?.toLowerCase() ?? "");
+
     if (email !== undefined) {
       const trimmedEmail = email?.trim().toLowerCase() ?? "";
+
+      if (isEmailChanging && settings && settings.allowMemberEmailUpdate === false) {
+        return {
+          success: false,
+          error: "Gmail updates have been locked by the Super Admin. Please visit reception to update your registered email.",
+        };
+      }
+
       if (trimmedEmail !== "") {
         if (!trimmedEmail.endsWith("@gmail.com")) {
           return {
@@ -103,8 +264,51 @@ export async function updateMemberProfileByCode({
       },
     });
 
+    // 3. Audit Logging & SMTP Notification
+    if (photoUrl !== undefined && photoUrl !== member.photoUrl) {
+      await logAuditEvent({
+        action: "MEMBER_PHOTO_UPDATED",
+        category: "MEMBER",
+        actorName: `${member.fullName} (${member.memberCode})`,
+        actorRole: "MEMBER",
+        targetName: member.memberCode,
+        details: "Member uploaded/updated their personal profile photo.",
+      });
+    }
+
+    if (isEmailChanging && cleanEmail) {
+      await logAuditEvent({
+        action: "MEMBER_EMAIL_UPDATED",
+        category: "MEMBER",
+        actorName: `${member.fullName} (${member.memberCode})`,
+        actorRole: "MEMBER",
+        targetName: member.memberCode,
+        details: `Member linked/updated their Gmail address to "${cleanEmail}". SMTP notification features enabled.`,
+      });
+
+      // Send confirmation email via SMTP
+      try {
+        const gymTitle = settings?.gymName || "A3Fitness Luxury Gym & Spa";
+        const appBaseUrl = process.env.APP_BASE_URL || "https://a3fitness-gms.vercel.app";
+        await sendEmailWelcome({
+          to: cleanEmail,
+          memberName: member.fullName,
+          memberCode: member.memberCode,
+          gymName: gymTitle,
+          portalUrl: `${appBaseUrl}/member/${member.memberCode}`,
+        });
+      } catch (emailErr) {
+        console.error("Failed to send welcome verification email to new Gmail:", emailErr);
+      }
+    }
+
     revalidatePath(`/member/${cleanCode}`);
-    return { success: true, message: "Profile updated successfully!" };
+    return {
+      success: true,
+      message: cleanEmail
+        ? `Profile updated! Gmail "${cleanEmail}" is now active for SMTP receipts & notifications.`
+        : "Profile updated successfully!",
+    };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "Failed to update profile." };
   }

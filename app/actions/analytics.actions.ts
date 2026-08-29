@@ -343,5 +343,21 @@ export async function getGymAnalytics(timeframe: AnalyticsTimeframe = "30d") {
             }
           : null,
       })),
+    auditLogs: (
+      await prisma.auditLog.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 100,
+      })
+    ).map((log) => ({
+      id: log.id,
+      action: log.action,
+      category: log.category,
+      actorName: log.actorName,
+      actorRole: log.actorRole,
+      targetName: log.targetName,
+      details: log.details,
+      ipAddress: log.ipAddress,
+      createdAt: log.createdAt.toISOString(),
+    })),
   };
 }

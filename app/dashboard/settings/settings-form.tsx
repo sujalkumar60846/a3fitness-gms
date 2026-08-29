@@ -18,6 +18,7 @@ type Settings = {
   invoicePrefix: string;
   allowOnlineRenewals: boolean;
   allowMemberPhotoUpdate: boolean;
+  allowMemberEmailUpdate: boolean;
   defaultPricing: Record<string, number>;
 };
 
@@ -32,6 +33,7 @@ const EMPTY_SETTINGS: Settings = {
   invoicePrefix: "INV",
   allowOnlineRenewals: false,
   allowMemberPhotoUpdate: true,
+  allowMemberEmailUpdate: true,
   defaultPricing: {},
 };
 
@@ -248,41 +250,69 @@ export function SettingsForm({ initialSettings }: { initialSettings: Settings | 
         </CardContent>
       </Card>
 
-      {/* Member Portal Permissions (Photo Updates) */}
+      {/* Member Portal Permissions (Photo & Gmail Updates) */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Member Portal Permissions</CardTitle>
-            <span
-              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                settings.allowMemberPhotoUpdate
-                  ? "bg-emerald-100 text-emerald-800"
-                  : "bg-rose-100 text-rose-800"
-              }`}
-            >
-              {settings.allowMemberPhotoUpdate ? "Updates Allowed" : "Photo Updates Locked"}
-            </span>
+            <CardTitle className="text-base">Member Self-Service Permissions</CardTitle>
+            <span className="text-xs text-zinc-500 font-medium">Control what members can edit from /member/[code]</span>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-xs text-zinc-500">
-            Control whether gym members are permitted to upload or change their profile photos from their personal self-dashboard (<code>/member/[code]</code>).
-          </p>
-
+          {/* Photo Update Toggle */}
           <div className="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 p-4">
             <div>
-              <p className="text-sm font-medium text-zinc-900">Allow Members to Update Photo</p>
-              <p className="text-xs text-zinc-500">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium text-zinc-900">Allow Members to Update Photo</p>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                    settings.allowMemberPhotoUpdate ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"
+                  }`}
+                >
+                  {settings.allowMemberPhotoUpdate ? "Active" : "Locked"}
+                </span>
+              </div>
+              <p className="text-xs text-zinc-500 mt-0.5">
                 {settings.allowMemberPhotoUpdate
-                  ? "Members can update their profile photo at any time from their personal dashboard."
-                  : "Super Admin has stopped photo updates. Members cannot change photos from their portal."}
+                  ? "Members can capture/upload a new profile photo from their personal dashboard."
+                  : "Super Admin has locked photo updates. Members cannot modify photos."}
               </p>
             </div>
-            <label className="relative inline-flex cursor-pointer items-center">
+            <label className="relative inline-flex cursor-pointer items-center shrink-0">
               <input
                 type="checkbox"
                 checked={settings.allowMemberPhotoUpdate}
                 onChange={(e) => updateField("allowMemberPhotoUpdate", e.target.checked)}
+                className="peer sr-only"
+              />
+              <div className="h-6 w-11 rounded-full bg-zinc-300 peer-checked:bg-zinc-900 peer-focus:outline-none after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full"></div>
+            </label>
+          </div>
+
+          {/* Gmail Update Toggle */}
+          <div className="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium text-zinc-900">Allow Members to Update Gmail Address</p>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                    settings.allowMemberEmailUpdate ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"
+                  }`}
+                >
+                  {settings.allowMemberEmailUpdate ? "Active" : "Locked"}
+                </span>
+              </div>
+              <p className="text-xs text-zinc-500 mt-0.5">
+                {settings.allowMemberEmailUpdate
+                  ? "Members can add or update their registered @gmail.com address for SMTP invoices & notifications."
+                  : "Super Admin has locked Gmail updates. Members cannot change their email from the portal."}
+              </p>
+            </div>
+            <label className="relative inline-flex cursor-pointer items-center shrink-0">
+              <input
+                type="checkbox"
+                checked={settings.allowMemberEmailUpdate}
+                onChange={(e) => updateField("allowMemberEmailUpdate", e.target.checked)}
                 className="peer sr-only"
               />
               <div className="h-6 w-11 rounded-full bg-zinc-300 peer-checked:bg-zinc-900 peer-focus:outline-none after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full"></div>

@@ -84,6 +84,16 @@ export async function changeMyPassword(
       data: { passwordHash },
     });
 
+    const { logAuditEvent } = await import("@/lib/audit");
+    await logAuditEvent({
+      action: "PASSWORD_CHANGED",
+      category: "SECURITY",
+      actorName: session.name,
+      actorRole: session.role,
+      targetName: session.email,
+      details: `${session.name} (${session.role}) changed their personal account password.`,
+    });
+
     return { success: true };
   } catch (err) {
     if (err instanceof z.ZodError) {

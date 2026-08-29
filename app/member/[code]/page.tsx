@@ -13,6 +13,10 @@ import { MemberAttendanceInsights } from "@/components/dashboard/member-attendan
 import { OnlineRenewalCard } from "./online-renewal-card";
 import { MemberProfileCard } from "./member-profile-card";
 import { MemberAttendanceButton } from "./member-attendance-button";
+import { MemberLogoutButton } from "./member-logout-button";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 /** Mirrors the derivation logic used everywhere else — status is always computed, never stored. */
 function computeStatus(subscriptions: { dueDate: Date; status: string }[], isActive: boolean): string {
@@ -71,9 +75,12 @@ export default async function MemberDashboardPage({ params }: { params: Promise<
 
   return (
     <div className="mx-auto min-h-screen max-w-3xl bg-zinc-50 px-4 py-8">
-      <Link href="/member" className="mb-4 inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-900">
-        <ArrowLeft className="h-3.5 w-3.5" /> Look up a different Member ID
-      </Link>
+      <div className="mb-4 flex items-center justify-between">
+        <Link href="/member" className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-900">
+          <ArrowLeft className="h-3.5 w-3.5" /> Switch Account
+        </Link>
+        <MemberLogoutButton />
+      </div>
 
       {/* Header: Left column with Member details, Right corner with Member Photo & Touch modal */}
       <div className="rounded-2xl border border-zinc-200 bg-white p-5 sm:p-6 shadow-sm">
@@ -108,6 +115,7 @@ export default async function MemberDashboardPage({ params }: { params: Promise<
                 isActive: member.isActive,
               }}
               allowPhotoUpdate={gymSettings?.allowMemberPhotoUpdate ?? true}
+              allowEmailUpdate={gymSettings?.allowMemberEmailUpdate ?? true}
             />
           </div>
         </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { X, Camera, Mail, Phone, Calendar, User, ShieldCheck, Lock, CheckCircle2, AlertCircle, Sparkles } from "lucide-react";
 import { updateMemberProfileByCode } from "@/app/actions/member-public.actions";
 import { PhotoCapture } from "@/components/shared/photo-capture";
@@ -17,9 +18,11 @@ interface MemberProfileCardProps {
     isActive: boolean;
   };
   allowPhotoUpdate: boolean;
+  allowEmailUpdate: boolean;
 }
 
-export function MemberProfileCard({ member, allowPhotoUpdate }: MemberProfileCardProps) {
+export function MemberProfileCard({ member, allowPhotoUpdate, allowEmailUpdate }: MemberProfileCardProps) {
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [photoBase64, setPhotoBase64] = useState<string | null>(member.photoUrl ?? null);
   const [email, setEmail] = useState(member.email ?? "");
@@ -35,7 +38,7 @@ export function MemberProfileCard({ member, allowPhotoUpdate }: MemberProfileCar
     if (trimmedEmail !== "" && !trimmedEmail.endsWith("@gmail.com")) {
       setResult({
         type: "error",
-        message: "Only Gmail addresses (e.g. yourname@gmail.com) are accepted.",
+        message: "Only Gmail addresses (e.g. yourname@gmail.com) are accepted for member accounts.",
       });
       return;
     }
@@ -43,17 +46,18 @@ export function MemberProfileCard({ member, allowPhotoUpdate }: MemberProfileCar
     setSubmitting(true);
     const res = await updateMemberProfileByCode({
       memberCode: member.memberCode,
-      photoUrl: photoBase64,
-      email: trimmedEmail || null,
+      photoUrl: allowPhotoUpdate ? photoBase64 : undefined,
+      email: allowEmailUpdate ? (trimmedEmail || null) : undefined,
     });
     setSubmitting(false);
 
     if (res.success) {
       setResult({ type: "success", message: res.message || "Profile updated successfully!" });
+      router.refresh();
       setTimeout(() => {
         setIsOpen(false);
         setResult(null);
-      }, 1400);
+      }, 1600);
     } else {
       setResult({ type: "error", message: res.error });
     }
@@ -167,7 +171,7 @@ export function MemberProfileCard({ member, allowPhotoUpdate }: MemberProfileCar
                     </label>
                     {!allowPhotoUpdate && (
                       <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
-                        <Lock className="h-3 w-3" /> Photo Updates Locked by Admin
+                        <Lock className="h-3 w-3" /> Locked by Admin
                       </span>
                     )}
                   </div>
@@ -177,31 +181,46 @@ export function MemberProfileCard({ member, allowPhotoUpdate }: MemberProfileCar
                       <PhotoCapture onChange={setPhotoBase64} initialPhotoUrl={member.photoUrl} />
                     </div>
                   ) : (
-                    <div className="rounded-xl border border-dashed border-zinc-300 p-4 text-center text-xs text-zinc-500 bg-zinc-50">
-                      Photo modification is disabled by the Super Admin. You can still view your details or update your Gmail below.
+                    <div className="rounded-xl border border-dashed border-zinc-300 p-3.5 text-center text-xs text-zinc-500 bg-zinc-50">
+                      Photo modification is locked by the Super Admin.
                     </div>
                   )}
                 </div>
 
                 {/* Email Update Section (Gmail Only) */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-800 flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-zinc-800 flex items-center gap-1.5">
                       <Mail className="h-3.5 w-3.5 text-zinc-600" />
                       <span>Email Address (Gmail Only)</span>
-                    </span>
-                    <span className="text-[10px] text-emerald-600 font-medium">@gmail.com required</span>
-                  </label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="yourname@gmail.com"
-                    className="w-full rounded-xl border border-zinc-200 px-3.5 py-2 text-xs text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-zinc-900 transition"
-                  />
-                  <p className="text-[11px] text-zinc-400">
-                    Used for receiving payment invoices and official membership receipts.
-                  </p>
+                    </label>
+                    {allowEmailUpdate ? (
+                      <span className="text-[10px] text-emerald-600 font-medium">@gmail.com required</span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
+                        <Lock className="h-3 w-3" /> Locked by Admin
+                      </span>
+                    )}
+                  </div>
+
+                  {allowEmailUpdate ? (
+                    <>
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="yourname@gmail.com"
+                        className="w-full rounded-xl border border-zinc-200 px-3.5 py-2 text-xs text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-zinc-900 transition"
+                      />
+                      <p className="text-[11px] text-zinc-400">
+                        Adding your Gmail automatically activates instant SMTP payment invoices & membership notifications.
+                      </p>
+                    </>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-zinc-300 p-3.5 text-center text-xs text-zinc-500 bg-zinc-50">
+                      Gmail updates are locked by the Super Admin. Current registered Gmail: <strong>{member.email || "None"}</strong>
+                    </div>
+                  )}
                 </div>
 
                 {result && (
@@ -234,7 +253,7 @@ export function MemberProfileCard({ member, allowPhotoUpdate }: MemberProfileCar
                   </button>
                   <button
                     type="submit"
-                    disabled={submitting}
+                    disabled={submitting || (!allowPhotoUpdate && !allowEmailUpdate)}
                     className="px-5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-semibold text-xs transition shadow-xs disabled:opacity-50"
                   >
                     {submitting ? "Saving Updates..." : "Save Profile Changes"}

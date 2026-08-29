@@ -4,6 +4,9 @@ import { hasRole } from "@/lib/auth/rbac";
 import { getGymAnalytics } from "@/app/actions/analytics.actions";
 import { AnalyticsDashboardView } from "./analytics-view";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function AnalyticsPage() {
   const session = await getSession();
   if (!session) redirect("/login");
@@ -24,7 +27,7 @@ export default async function AnalyticsPage() {
         </div>
       </div>
 
-      <AnalyticsDashboardView initialData={analyticsData} />
+      <AnalyticsDashboardView initialData={analyticsData} currentUserRole={session.role} />
     </div>
   );
 }

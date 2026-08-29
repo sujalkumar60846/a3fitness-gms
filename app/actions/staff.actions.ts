@@ -6,11 +6,10 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/auth/rbac";
 import { Role, UserStatus } from "@prisma/client";
+import { logAuditEvent } from "@/lib/audit";
 
 // ----------------------------------------------------------------------------
-// Every action here requires "staff:*" permissions, which the PERMISSIONS map
-// in lib/auth/rbac.ts restricts to SUPER_ADMIN only. A STAFF or ADMIN calling
-// these directly (e.g. by crafting a request) gets a ForbiddenError.
+// Staff & Admin account management with full Super Admin Audit Logging
 // ----------------------------------------------------------------------------
 
 type ActionResult<T = undefined> = { success: true; data?: T } | { success: false; error: string };
@@ -47,7 +46,17 @@ export async function createStaffAccount(
       select: { id: true },
     });
 
+    await logAuditEvent({
+      action: "STAFF_CREATED",
+      category: "STAFF",
+      actorName: session.name,
+      actorRole: session.role,
+      targetName: `${parsed.name} (${parsed.role})`,
+      details: `Created new staff account for ${parsed.name} (${parsed.email}) with role ${parsed.role}.`,
+    });
+
     revalidatePath("/dashboard/staff-management");
+    revalidatePath("/dashboard/analytics");
     return { success: true, data: user };
   } catch (err) {
     return { success: false, error: errorMessage(err) };
@@ -81,7 +90,17 @@ export async function updateStaffRole(
       data: { role: parsed.newRole as Role },
     });
 
+    await logAuditEvent({
+      action: "STAFF_ROLE_UPDATED",
+      category: "STAFF",
+      actorName: session.name,
+      actorRole: session.role,
+      targetName: `${target.name} (${target.role} → ${parsed.newRole})`,
+      details: `Updated role for ${target.name} from ${target.role} to ${parsed.newRole}.`,
+    });
+
     revalidatePath("/dashboard/staff-management");
+    revalidatePath("/dashboard/analytics");
     return { success: true };
   } catch (err) {
     return { success: false, error: errorMessage(err) };
@@ -105,7 +124,18 @@ export async function setStaffStatus(
     }
 
     await prisma.user.update({ where: { id: userId }, data: { status: status as UserStatus } });
+
+    await logAuditEvent({
+      action: "STAFF_STATUS_UPDATED",
+      category: "STAFF",
+      actorName: session.name,
+      actorRole: session.role,
+      targetName: `${target.name} (${target.role})`,
+      details: `Account status updated to ${status} for ${target.name}.`,
+    });
+
     revalidatePath("/dashboard/staff-management");
+    revalidatePath("/dashboard/analytics");
     return { success: true };
   } catch (err) {
     return { success: false, error: errorMessage(err) };
@@ -125,15 +155,22 @@ export async function deleteStaffAccount(userId: string): Promise<ActionResult> 
       return { success: false, error: "Super Admin accounts cannot be deleted." };
     }
 
-    // Soft-delete is generally safer than hard delete (preserves audit trail
-    // for members they registered / payments they collected, which are
-    // protected by onDelete: Restrict in the schema anyway).
     await prisma.user.update({
       where: { id: userId },
       data: { status: "SUSPENDED", email: `deleted+${userId}@invalid.local` },
     });
 
+    await logAuditEvent({
+      action: "STAFF_DELETED",
+      category: "STAFF",
+      actorName: session.name,
+      actorRole: session.role,
+      targetName: `${target.name} (${target.role})`,
+      details: `Deleted account for ${target.name} (${target.email}).`,
+    });
+
     revalidatePath("/dashboard/staff-management");
+    revalidatePath("/dashboard/analytics");
     return { success: true };
   } catch (err) {
     return { success: false, error: errorMessage(err) };
@@ -186,15 +223,25 @@ export async function resetStaffPassword(
     }
 
     // 3. Super Admin can permanently set passwords for ALL accounts (Super Admin, Admin, and Staff).
-
     const passwordHash = await bcrypt.hash(parsed.newPassword, 12);
     await prisma.user.update({
       where: { id: parsed.userId },
       data: { passwordHash },
     });
 
+    // Log Audit Event
+    await logAuditEvent({
+      action: "STAFF_PASSWORD_RESET",
+      category: "SECURITY",
+      actorName: session.name,
+      actorRole: session.role,
+      targetName: `${target.name} (${target.role})`,
+      details: `${session.name} (${session.role}) set a new permanent password for ${target.name} (${target.email} · ${target.role}).`,
+    });
+
     revalidatePath("/dashboard/staff-management");
     revalidatePath("/dashboard/account");
+    revalidatePath("/dashboard/analytics");
     return { success: true };
   } catch (err) {
     return { success: false, error: errorMessage(err) };

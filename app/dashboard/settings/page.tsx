@@ -34,6 +34,7 @@ export default async function SettingsPage() {
                   invoicePrefix: settings.invoicePrefix,
                   allowOnlineRenewals: settings.allowOnlineRenewals ?? false,
                   allowMemberPhotoUpdate: settings.allowMemberPhotoUpdate ?? true,
+                  allowMemberEmailUpdate: settings.allowMemberEmailUpdate ?? true,
                   defaultPricing: (settings.defaultPricing as Record<string, number>) ?? {},
                 }
               : null

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/auth/rbac";
 import { getSession } from "@/lib/auth/session";
+import { logAuditEvent } from "@/lib/audit";
 
 type ActionResult<T = undefined> = { success: true; data?: T } | { success: false; error: string };
 
@@ -29,6 +30,7 @@ const updateSettingsSchema = z.object({
   invoicePrefix: z.string().trim().min(1, "Invoice prefix is required").max(10),
   allowOnlineRenewals: z.boolean().default(false),
   allowMemberPhotoUpdate: z.boolean().default(true),
+  allowMemberEmailUpdate: z.boolean().default(true),
   // Keys are plan-month strings ("1"/"3"/"6"/"12") — suggested pricing
   defaultPricing: z.record(z.string(), z.number().nonnegative()).optional().default({}),
 });
@@ -37,7 +39,7 @@ export async function updateGymSettings(
   input: z.infer<typeof updateSettingsSchema>
 ): Promise<ActionResult> {
   try {
-    await requirePermission("settings:manage");
+    const session = await requirePermission("settings:manage");
     const parsed = updateSettingsSchema.parse(input);
 
     await prisma.gymSettings.upsert({
@@ -52,6 +54,7 @@ export async function updateGymSettings(
         invoicePrefix: parsed.invoicePrefix,
         allowOnlineRenewals: parsed.allowOnlineRenewals,
         allowMemberPhotoUpdate: parsed.allowMemberPhotoUpdate,
+        allowMemberEmailUpdate: parsed.allowMemberEmailUpdate,
         defaultPricing: parsed.defaultPricing,
       },
       update: {
@@ -63,14 +66,26 @@ export async function updateGymSettings(
         invoicePrefix: parsed.invoicePrefix,
         allowOnlineRenewals: parsed.allowOnlineRenewals,
         allowMemberPhotoUpdate: parsed.allowMemberPhotoUpdate,
+        allowMemberEmailUpdate: parsed.allowMemberEmailUpdate,
         defaultPricing: parsed.defaultPricing,
       },
+    });
+
+    // Log Audit Event
+    await logAuditEvent({
+      action: "SETTINGS_UPDATED",
+      category: "SETTINGS",
+      actorName: session.name,
+      actorRole: session.role,
+      targetName: "Gym System Settings",
+      details: `Updated gym settings: "${parsed.gymName}" | Photo Updates: ${parsed.allowMemberPhotoUpdate ? 'Enabled' : 'Locked'} | Gmail Updates: ${parsed.allowMemberEmailUpdate ? 'Enabled' : 'Locked'}`,
     });
 
     revalidatePath("/dashboard/settings");
     revalidatePath("/dashboard/members/new");
     revalidatePath("/dashboard/payments/new");
     revalidatePath("/dashboard/broadcast");
+    revalidatePath("/dashboard/analytics");
     revalidatePath("/api/portal/settings");
     return { success: true };
   } catch (err) {
@@ -100,4 +115,3 @@ export async function testEmailConfiguration(targetEmail: string): Promise<Actio
     return { success: false, error: err instanceof Error ? err.message : "Test email failed" };
   }
 }
-

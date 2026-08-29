@@ -290,6 +290,7 @@ model GymSettings {
   invoicePrefix String  @default("INV")
   allowOnlineRenewals Boolean @default(false)
   allowMemberPhotoUpdate Boolean @default(true)
+  allowMemberEmailUpdate Boolean @default(true)
 
   // Suggested price per plan duration, e.g. {"1": 1200, "3": 3300, "6": 6000, "12": 10800}.
   // Purely a UI convenience to auto-fill the fee field — every registration
@@ -298,6 +299,42 @@ model GymSettings {
   defaultPricing Json?
 
   updatedAt     DateTime @updatedAt
+}
+
+// ----------------------------------------------------------------------------
+// AUDIT & ACTIVITY LOG (Super Admin Analytics & Security Tracker)
+// ----------------------------------------------------------------------------
+
+enum AuditAction {
+  SETTINGS_UPDATED
+  PASSWORD_CHANGED
+  STAFF_PASSWORD_RESET
+  STAFF_CREATED
+  STAFF_ROLE_UPDATED
+  STAFF_STATUS_UPDATED
+  STAFF_DELETED
+  MEMBER_CREATED
+  MEMBER_UPDATED
+  MEMBER_EMAIL_UPDATED
+  MEMBER_PHOTO_UPDATED
+  MEMBER_DELETED
+  MEMBER_LOGGED_IN
+}
+
+model AuditLog {
+  id          String      @id @default(cuid())
+  action      AuditAction
+  category    String      // "SETTINGS", "SECURITY", "STAFF", "MEMBER"
+  actorName   String      // e.g. "Pradeep Sharma (Super Admin)", "GYM-0001 (Aman)"
+  actorRole   String?     // "SUPER_ADMIN", "ADMIN", "STAFF", "MEMBER"
+  targetName  String?     // e.g. "Gym Settings", "Priya Verma", "GYM-0001"
+  details     String      // Description of what changed
+  ipAddress   String?
+  createdAt   DateTime    @default(now())
+
+  @@index([action])
+  @@index([category])
+  @@index([createdAt])
 }
 
 // ----------------------------------------------------------------------------

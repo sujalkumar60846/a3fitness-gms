@@ -15,6 +15,18 @@ import {
   CalendarRange,
   ChevronRight,
   Layers,
+  ShieldCheck,
+  KeyRound,
+  Search,
+  Filter,
+  Shield,
+  Lock,
+  FileText,
+  CheckCircle2,
+  History,
+  Settings as SettingsIcon,
+  Mail,
+  UserCog,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -72,11 +84,32 @@ type AnalyticsData = {
     count: number;
   }[];
   recentPayments: any[];
+  auditLogs?: {
+    id: string;
+    action: string;
+    category: string;
+    actorName: string;
+    actorRole: string | null;
+    targetName: string | null;
+    details: string;
+    ipAddress: string | null;
+    createdAt: string;
+  }[];
 };
 
-export function AnalyticsDashboardView({ initialData }: { initialData: AnalyticsData }) {
+export function AnalyticsDashboardView({
+  initialData,
+  currentUserRole,
+}: {
+  initialData: AnalyticsData;
+  currentUserRole?: string;
+}) {
   const [data] = useState<AnalyticsData>(initialData);
-  const [activeTab, setActiveTab] = useState<"overview" | "all_months" | "revenue" | "attendance" | "members">("overview");
+  const [activeTab, setActiveTab] = useState<
+    "overview" | "all_months" | "revenue" | "attendance" | "members" | "audit_logs"
+  >("overview");
+  const [auditSearch, setAuditSearch] = useState("");
+  const [auditCategory, setAuditCategory] = useState("ALL");
 
   const {
     kpis,
@@ -87,6 +120,7 @@ export function AnalyticsDashboardView({ initialData }: { initialData: Analytics
     hourlyDistribution,
     paymentMethods,
     planDistribution,
+    auditLogs = [],
   } = data;
 
   const [selectedMonthKey, setSelectedMonthKey] = useState<string>(
@@ -114,6 +148,7 @@ export function AnalyticsDashboardView({ initialData }: { initialData: Analytics
               { id: "revenue", label: "Revenue & Billing", icon: Wallet },
               { id: "attendance", label: "Attendance & Traffic", icon: Activity },
               { id: "members", label: "Acquisitions", icon: Users },
+              { id: "audit_logs", label: "Activity & Audit Logs", icon: ShieldCheck },
             ] as const
           ).map((tab) => {
             const Icon = tab.icon;
@@ -129,6 +164,11 @@ export function AnalyticsDashboardView({ initialData }: { initialData: Analytics
               >
                 <Icon className="h-3.5 w-3.5" />
                 {tab.label}
+                {tab.id === "audit_logs" && auditLogs.length > 0 && (
+                  <span className="ml-1 rounded-full bg-zinc-900 px-1.5 py-0.2 text-[9px] text-white">
+                    {auditLogs.length}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -597,6 +637,158 @@ export function AnalyticsDashboardView({ initialData }: { initialData: Analytics
               })}
             </CardContent>
           </Card>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 6. TAB: ACTIVITY & AUDIT LOGS (Super Admin / Admin Security & Changes)    */}
+      {/* ========================================================================= */}
+      {activeTab === "audit_logs" && (
+        <div className="space-y-6">
+          {/* Header Banner */}
+          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-xs">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h2 className="flex items-center gap-2 text-lg font-bold text-zinc-900">
+                  <ShieldCheck className="h-5 w-5 text-zinc-900" /> System Activity & Audit Trail
+                </h2>
+                <p className="text-xs text-zinc-500 mt-1">
+                  Track permanent password overrides, gym branding modifications, staff management actions, and member self-service updates (photo uploads & Gmail links).
+                </p>
+              </div>
+              <div className="rounded-xl bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-800">
+                {auditLogs.length} Logged Event{auditLogs.length === 1 ? "" : "s"}
+              </div>
+            </div>
+
+            {/* Filter & Search Bar */}
+            <div className="mt-5 flex flex-wrap items-center gap-3 pt-4 border-t border-zinc-100">
+              <div className="relative flex-1 min-w-[240px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
+                <input
+                  type="text"
+                  value={auditSearch}
+                  onChange={(e) => setAuditSearch(e.target.value)}
+                  placeholder="Search by actor, target, or details..."
+                  className="w-full rounded-xl border border-zinc-200 pl-9 pr-3 py-2 text-xs text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 transition"
+                />
+              </div>
+
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                {[
+                  { id: "ALL", label: "All Categories" },
+                  { id: "SECURITY", label: "Security & Passwords" },
+                  { id: "SETTINGS", label: "Gym Settings" },
+                  { id: "MEMBER", label: "Member Activity" },
+                  { id: "STAFF", label: "Staff Accounts" },
+                ].map((cat) => (
+                  <button
+                    key={cat.id}
+                    onClick={() => setAuditCategory(cat.id)}
+                    className={`shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-medium transition ${
+                      auditCategory === cat.id
+                        ? "bg-zinc-900 text-white shadow-2xs"
+                        : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                    }`}
+                  >
+                    {cat.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Audit Events List */}
+          <div className="rounded-2xl border border-zinc-200 bg-white overflow-hidden shadow-xs">
+            {(() => {
+              const filtered = auditLogs.filter((log) => {
+                const matchesCat = auditCategory === "ALL" || log.category === auditCategory;
+                const q = auditSearch.trim().toLowerCase();
+                const matchesQuery =
+                  !q ||
+                  log.actorName.toLowerCase().includes(q) ||
+                  (log.targetName && log.targetName.toLowerCase().includes(q)) ||
+                  log.details.toLowerCase().includes(q) ||
+                  log.action.toLowerCase().includes(q);
+                return matchesCat && matchesQuery;
+              });
+
+              if (filtered.length === 0) {
+                return (
+                  <div className="p-12 text-center text-zinc-500">
+                    <History className="mx-auto h-10 w-10 text-zinc-300 mb-3" />
+                    <p className="text-sm font-semibold text-zinc-700">No activity logs match this filter.</p>
+                    <p className="text-xs text-zinc-400 mt-1">Events will appear automatically as settings, passwords, or member profiles are updated.</p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="divide-y divide-zinc-100">
+                  {filtered.map((log) => {
+                    const date = new Date(log.createdAt);
+                    const formattedDate = date.toLocaleDateString("en-IN", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                    });
+                    const formattedTime = date.toLocaleTimeString("en-IN", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    });
+
+                    // Visual badge style by category
+                    const categoryStyles: Record<string, { bg: string; text: string; border: string }> = {
+                      SECURITY: { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200" },
+                      SETTINGS: { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200" },
+                      MEMBER: { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200" },
+                      STAFF: { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200" },
+                    };
+
+                    const style = categoryStyles[log.category] || {
+                      bg: "bg-zinc-50",
+                      text: "text-zinc-700",
+                      border: "border-zinc-200",
+                    };
+
+                    return (
+                      <div key={log.id} className="p-4 sm:p-5 hover:bg-zinc-50/50 transition">
+                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 sm:gap-4">
+                          <div className="space-y-1.5 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider border ${style.bg} ${style.text} ${style.border}`}
+                              >
+                                {log.category}
+                              </span>
+                              <span className="text-xs font-semibold text-zinc-900">{log.action.replace(/_/g, " ")}</span>
+                              {log.targetName && (
+                                <span className="rounded-md bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-600">
+                                  Target: {log.targetName}
+                                </span>
+                              )}
+                            </div>
+
+                            <p className="text-xs font-medium text-zinc-800 leading-relaxed">{log.details}</p>
+
+                            <div className="flex items-center gap-2 text-[11px] text-zinc-400">
+                              <span>Actor: <strong className="text-zinc-600">{log.actorName}</strong> {log.actorRole && `(${log.actorRole})`}</span>
+                              {log.ipAddress && <span>· IP: {log.ipAddress}</span>}
+                            </div>
+                          </div>
+
+                          <div className="text-left sm:text-right shrink-0 text-xs text-zinc-500">
+                            <div className="font-medium text-zinc-700">{formattedTime}</div>
+                            <div className="text-[11px] text-zinc-400">{formattedDate}</div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
         </div>
       )}
     </div>
